@@ -47,7 +47,7 @@ is_interleaved_pair(const char *s1, const char *s2)
 static int
 usage()
 {
-    fprintf(stderr, "pairs version %s\n", VERSION);
+    fprintf(stderr, "pairs (KDM MODIFIED) version %s\n", VERSION);
     fprintf(stderr, "\nInterleaves (pairs) and un-interleaves paired-end files");
     fprintf(stderr, "Usage <command> <arguments>\n\n");
     fprintf(stderr, "Command:  join       common transformation of FASTA/Q\n");
