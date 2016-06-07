@@ -18,7 +18,7 @@ pairs: pairs.c | kseq.h
 	$(CC) $(CFLAGS) $< -o pairs $(LDFLAGS) 
 
 test:
-	(cd tests && python test_pairs.py in-1.fq in-2.fq)
+	bash tests/test.sh
 
 format:
 	astyle -A8 -s4 -k3 -W3 -j -c -xC80 --mode=c $(wildcard *.c)
