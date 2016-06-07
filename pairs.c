@@ -61,8 +61,8 @@ printstr(FILE *stream, const kstring_t *s, unsigned line_len)
 {
     /* from Heng's stk_printstr */
     if (line_len != UINT_MAX) {
-        int i, rest = s->l;
-        for (i = 0; i < s->l; i += line_len, rest -= line_len) {
+        size_t rest = s->l;
+        for (size_t i = 0; i < s->l; i += line_len, rest -= line_len) {
             fputc('\n', stream);
             if (rest > line_len) {
                 fwrite(s->s + i, 1, line_len, stream);
@@ -135,7 +135,7 @@ int pairs_join(int argc, char *argv[])
         return join_usage();
     }
 
-    for (size_t f = optind; f <= argc; f += 2) {
+    for (int f = optind; f <= argc; f += 2) {
         gzFile fp[2] = {NULL, NULL};
         kseq_t *ks[2] = {NULL, NULL};
         ssize_t l[] = {0, 0};
