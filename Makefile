@@ -1,18 +1,9 @@
 PROGRAM_NAME = pairs
 CC = gcc
-DEBUG ?= 0
-ifeq ($(wildcard .git/H*),.git/HEAD)
-	VERSION = $(shell git describe --always)
-else
-	VERSION = 0.1.0-dev
-endif
-CFLAGS = -Wall -pedantic -DVERSION=$(VERSION) -std=gnu99
-ifeq ($(DEBUG), 1)
-	CFLAGS += -g -O0
-else
-	CFLAGS += -O3
-endif
+VERSION = $(shell git describe --always)
+CFLAGS = -Wall -Wextra -DVERSION=$(VERSION) -std=gnu99 -O2
 LDFLAGS = -static -lz
+
 
 .PHONY: clean all test
 
@@ -28,3 +19,6 @@ pairs: pairs.c | kseq.h
 
 test:
 	(cd tests && python test_pairs.py in-1.fq in-2.fq)
+
+format:
+	astyle -A8 -s4 -k3 -W3 -j -c -xC80 --mode=c $(wildcard *.c)
