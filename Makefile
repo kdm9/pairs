@@ -1,43 +1,30 @@
-PROGRAM_NAME = seqqs
-VERSION = 0.01
+PROGRAM_NAME = pairs
 CC = gcc
 DEBUG ?= 0
+ifeq ($(wildcard .git/H*),.git/HEAD)
+	VERSION = $(shell git describe --always)
+else
+	VERSION = 0.1.0-dev
+endif
 CFLAGS = -Wall -pedantic -DVERSION=$(VERSION) -std=gnu99
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g -O0
-else 
+else
 	CFLAGS += -O3
 endif
-ARCHIVE = $(PROGRAM_NAME)_$(VERSION)
-LDFLAGS = -lz
-OBJS = seqqs.o
-LOBJS = seqqs.o
+LDFLAGS = -static -lz
 
 .PHONY: clean all test
 
-all: seqqs pairs
+all: pairs
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-seqqs.o: kseq.h kseq.h
-
-clean: 
+clean:
 	rm -f $(OBJS)
 	rm -f $(PROGRAM_NAME)
 	rm -f pairs pairs.o
 
-seqqs: $(OBJS)
-	$(CC) $(CFLAGS) $? -o $(PROGRAM_NAME) $(LDFLAGS) 
-
-pairs: pairs.o
-	$(CC) $(CFLAGS) $? -o pairs $(LDFLAGS) 
-
-lib: libseqqs.so
+pairs: pairs.c | kseq.h
+	$(CC) $(CFLAGS) $< -o pairs $(LDFLAGS) 
 
 test:
 	(cd tests && python test_pairs.py in-1.fq in-2.fq)
-
-libseqqs.so: CLFAGS += -fpic -D_LIB_ONLY
-libseqqs.so: $(LOBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared -o $@ $^
