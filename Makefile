@@ -1,7 +1,7 @@
 PROGRAM_NAME = pairs
 CC = gcc
 VERSION = $(shell git describe --always)
-CFLAGS = -Wall -Wextra -DVERSION=$(VERSION) -std=gnu99 -O2
+CFLAGS = -Wall -Wextra -DVERSION="\"$(VERSION)\"" -std=gnu99 -O2
 LDFLAGS = -static -lz
 
 

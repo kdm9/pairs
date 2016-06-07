@@ -1,34 +1,53 @@
+/*******************************************************************************
+*                        Pairs: Join interleaved reads                        *
+*******************************************************************************/
+// Original author Vince Buffalo. Licenced by him under the MIT/Expat licence.
+// Includes code by Heng Li (kseq.h, and code here from seqtk.c).
+// Modifications by Kevin Murray
+
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <zlib.h>
 #include <limits.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdbool.h>
+#include <zlib.h>
 #include "kseq.h"
 
 KSEQ_INIT(gzFile, gzread)
 
-static int is_interleaved_pair(const char *s1, const char *s2)
+inline int
+is_interleaved_pair(const char *s1, const char *s2)
 {
-    while (*s1 && *s2) {
-        /* strings should be identical apart from trailing 1 or 2
-           (i.e. seq-a/1 and seq-a/2)
+    /* strings should be identical apart from trailing 1 or 2
+       (i.e. seq-a/1 and seq-a/2)
 
-           TODO: this checking is fairly simplistic, could be made better.
-        */
-        if (*s1 != *s2 && (*s1 != '1' && *s2 != '2')) {
-            return 0;
+       TODO: this checking is fairly simplistic, could be made better.
+    */
+    assert(s1 != NULL && s2 != NULL);
+    size_t i = 0;
+    while (s1[i] && s2[i]) {
+        if (s1[i] != s2[i]) {
+            if (s1[i] == '1' && s2[i] == '2') {
+                return 1;
+            }
+            break;
         }
-        s1++;
-        s2++;
+        i++;
     }
+    // If we got to here, the strings were identical, so this a valid pair in
+    // Illumina 1.8+ format with the /1 /2 pair IDs in the kseq_t's comment
+    // field.
     return 1;
 }
 
-static int usage()
+static int
+usage()
 {
+    fprintf(stderr, "pairs version %s\n", VERSION);
     fprintf(stderr, "\nInterleaves (pairs) and un-interleaves paired-end files");
     fprintf(stderr, "Usage <command> <arguments>\n\n");
     fprintf(stderr, "Command:  join       common transformation of FASTA/Q\n");
@@ -37,7 +56,8 @@ static int usage()
     return 1;
 }
 
-static void printstr(FILE *stream, const kstring_t *s, unsigned line_len)
+static void
+printstr(FILE *stream, const kstring_t *s, unsigned line_len)
 {
     /* from Heng's stk_printstr */
     if (line_len != UINT_MAX) {
@@ -81,18 +101,22 @@ void printseq(FILE *stream, const kseq_t *s, int line_len, int tag)
 int join_usage()
 {
     fputs("\
-Usage:    pairs join [options] <in1.fq> <in2.fq>\n\n\
+Usage:    pairs join [options] <in1.fq> <in2.fq> ...\n\
+\n\
 Options:  -t   tag interleaved pairs with '/1' and '/2' (before comment)\n\
           -s   error out when read names are different\n\
-Interleaves two paired-end files.\n\n", stderr);
+Interleaves sets of two paired-end files.\n\
+More than once pair can be given, e.g. pairs join A-1.fq A-2.fq B-1.fq B-2.fq\n\
+\n", stderr);
     return 1;
 }
 
 int pairs_join(int argc, char *argv[])
 {
-    gzFile fp[2];
-    kseq_t *ks[2];
-    int c, i, tag=0, strict=0, l[] = {0, 0};
+    int tag=0, strict=0;
+    size_t nfilepairs = 0;
+
+    int c;
     while ((c = getopt(argc, argv, "ts")) >= 0) {
         switch (c) {
         case 't':
@@ -106,43 +130,62 @@ int pairs_join(int argc, char *argv[])
         }
     }
 
-    if (optind == argc) {
+    nfilepairs = argc - optind;
+    if (nfilepairs == 0 || nfilepairs % 2 != 0) {
         return join_usage();
     }
 
-    for (i = 0; i < 2; ++i) {
-        fp[i] = gzopen(argv[optind + i], "r");
-        ks[i] = kseq_init(fp[i]);
-    }
-    for (;;) {
-        for (i = 0; i < 2; ++i) {
-            l[i] = kseq_read(ks[i]);
+    for (size_t f = optind; f <= argc; f += 2) {
+        gzFile fp[2] = {NULL, NULL};
+        kseq_t *ks[2] = {NULL, NULL};
+        ssize_t l[] = {0, 0};
+        bool have_warned = false;
+
+        /****************
+        *  Open files  *
+        ****************/
+        for (size_t i = 0; i < 2; ++i) {
+            fp[i] = gzopen(argv[f + i], "r");
+            ks[i] = kseq_init(fp[i]);
         }
-        if (l[0] < 0 || l[1] < 0) {
-            break;
-        }
-        if (!is_interleaved_pair(ks[0]->name.s, ks[1]->name.s)) {
-            fprintf(stderr, "[%s] warning: different sequence names: %s != %s\n",
-                    __func__, ks[0]->name.s, ks[1]->name.s);
-            if (strict) {
-                return 1;
+
+        /******************
+        *  Foreach read  *
+        ******************/
+        for (;;) {
+            for (size_t i = 0; i < 2; ++i) {
+                l[i] = kseq_read(ks[i]);
+            }
+            if (l[0] < 0 || l[1] < 0) {
+                break;
+            }
+            if (!is_interleaved_pair(ks[0]->name.s, ks[1]->name.s)) {
+                if (!have_warned) {
+                    fprintf(stderr, "warning: different sequence names: '%s' != '%s'\n",
+                            ks[0]->name.s, ks[1]->name.s);
+                    fprintf(stderr, "in files '%s' and '%s'\n", argv[f], argv[f + 1]);
+                    have_warned = true;
+                }
+                if (strict) {
+                    return 1;
+                }
+            }
+
+            for (size_t i = 0; i < 2; ++i) {
+                printseq(stdout, ks[i], ks[i]->seq.l, tag ? i+1 : 0);
             }
         }
 
-        for (i = 0; i < 2; ++i) {
-            printseq(stdout, ks[i], ks[i]->seq.l, tag ? i+1 : 0);
+        if (l[0] > 0 || l[1] > 0) {
+            fprintf(stderr,
+                    "[%s] error: paired end files have differing numbers of reads.\n", __func__);
+            exit(1);
         }
-    }
 
-    if (l[0] > 0 || l[1] > 0) {
-        fprintf(stderr,
-                "[%s] error: paired end files have differing numbers of reads.\n", __func__);
-        exit(1);
-    }
-
-    for (i = 0; i < 2; ++i) {
-        kseq_destroy(ks[i]);
-        gzclose(fp[i]);
+        for (size_t i = 0; i < 2; ++i) {
+            kseq_destroy(ks[i]);
+            gzclose(fp[i]);
+        }
     }
     return 0;
 }
